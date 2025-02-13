@@ -92,9 +92,10 @@ def main():
                 disas_len = sum(vn.size for vn in op.inputs)
                 disas_slice = code[disas_offset : disas_offset + disas_len]
                 for insn in ctx.disassemble(disas_slice, disas_addr).instructions:
-                    print(f"{insn.addr.offset:#x}/{insn.length}: {insn.mnem} {insn.body}")
+                  # print(f"{insn.addr.offset:#x}/{insn.length}: {insn.mnem} {insn.body}")
+                    print(f"{hex(insn.addr.offset)[2:].zfill(8)} : {insn.mnem} {insn.body.replace(',', ', ') if insn.body else ''}")
             else:
-                print(f" {i - last_imark_idx - 1:3d}: {PcodePrettyPrinter.fmt_op(op)}")
+                print(f"  {PcodePrettyPrinter.fmt_op(op)}")
         print("")
     except (BadDataError, UnimplError) as e:
         print(f"An error occurred during translation: {e}")
