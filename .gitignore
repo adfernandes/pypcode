@@ -9,3 +9,4 @@ docs/_build/
 *.manifest
 *.gradle
 *.java
+.venv/
