@@ -17,13 +17,29 @@ class OpFormat:
 
     @staticmethod
     def fmt_vn(vn: Varnode) -> str:
-        if vn.space.name == "const":
-            return "%#x" % vn.offset
-        elif vn.space.name == "register":
+      # if vn.space.name == "const":
+      #     return "%#x" % vn.offset
+        if vn.space.name == "register":
             name = vn.getRegisterName()
             if name:
-                return name
+                return OpFormat.reformat(name)
         return f"{vn.space.name}[{vn.offset:x}:{vn.size:d}]"
+
+    @staticmethod
+    def reformat(name: str) -> str:
+        import re
+        if name == "ISAModeSwitch": return "tmp[TB]"
+        if name == "mult_addr": return "address"
+        match = re.match(r'^tmp([A-Z][A-Z])$', name)
+        if match: return f"tmp[{match.group(1)}]"
+        match = re.match(r'^r(\d+)$', name)
+        if match:
+            rn = match.group(1)
+            if rn == 13: return "sp"
+            if rn == 14: return "lr"
+            if rn == 15: return "pc"
+            return f"r{rn}"
+        return f"{name}"
 
     def fmt(self, op: PcodeOp) -> str:
         return f'{op.opcode.__name__} {", ".join(self.fmt_vn(i) for i in op.inputs)}'
@@ -92,19 +108,22 @@ class OpFormatSpecial(OpFormat):
         return f"call [{self.fmt_vn(op.inputs[0])}]"
 
     def fmt_CALLOTHER(self, op: PcodeOp) -> str:
-        return f'{op.inputs[0].getUserDefinedOpName()}({", ".join(self.fmt_vn(i) for i in op.inputs[1:])})'
+        op_name = op.inputs[0].getUserDefinedOpName()
+        if op_name == "software_bkpt":
+            op_name = "SoftwareBreakpoint"
+        return f'CALLOTHER {op_name}, {", ".join(self.fmt_vn(i) for i in op.inputs[1:])}'.rstrip(', ')
 
     def fmt_CBRANCH(self, op: PcodeOp) -> str:
         return f"if ({self.fmt_vn(op.inputs[1])}) goto {self.fmt_vn(op.inputs[0])}"
 
     def fmt_LOAD(self, op: PcodeOp) -> str:
-        return f"*[{op.inputs[0].getSpaceFromConst().name}]{self.fmt_vn(op.inputs[1])}"
+        return f"LOAD {op.inputs[0].getSpaceFromConst().name}, {self.fmt_vn(op.inputs[1])}"
 
     def fmt_RETURN(self, op: PcodeOp) -> str:
         return f"return {self.fmt_vn(op.inputs[0])}"
 
     def fmt_STORE(self, op: PcodeOp) -> str:
-        return f"*[{op.inputs[0].getSpaceFromConst().name}]{self.fmt_vn(op.inputs[1])} = {self.fmt_vn(op.inputs[2])}"
+        return f"STORE {op.inputs[0].getSpaceFromConst().name}, {self.fmt_vn(op.inputs[1])}, {self.fmt_vn(op.inputs[2])}"
 
     def fmt(self, op: PcodeOp) -> str:
         return {
@@ -128,67 +147,67 @@ class PcodePrettyPrinter:
     DEFAULT_OP_FORMAT = OpFormat()
 
     OP_FORMATS = {
-        OpCode.BOOL_AND: OpFormatBinary("&&"),
-        OpCode.BOOL_NEGATE: OpFormatUnary("!"),
-        OpCode.BOOL_OR: OpFormatBinary("||"),
-        OpCode.BOOL_XOR: OpFormatBinary("^^"),
-        OpCode.BRANCH: OpFormatSpecial(),
-        OpCode.BRANCHIND: OpFormatSpecial(),
-        OpCode.CALL: OpFormatSpecial(),
-        OpCode.CALLIND: OpFormatSpecial(),
+      # OpCode.BOOL_AND: OpFormatBinary("&&"),
+      # OpCode.BOOL_NEGATE: OpFormatUnary("!"),
+      # OpCode.BOOL_OR: OpFormatBinary("||"),
+      # OpCode.BOOL_XOR: OpFormatBinary("^^"),
+      # OpCode.BRANCH: OpFormatSpecial(),
+      # OpCode.BRANCHIND: OpFormatSpecial(),
+      # OpCode.CALL: OpFormatSpecial(),
+      # OpCode.CALLIND: OpFormatSpecial(),
         OpCode.CALLOTHER: OpFormatSpecial(),
-        OpCode.CBRANCH: OpFormatSpecial(),
-        OpCode.COPY: OpFormatUnary(""),
-        OpCode.CPOOLREF: OpFormatFunc("cpool"),
-        OpCode.FLOAT_ABS: OpFormatFunc("abs"),
-        OpCode.FLOAT_ADD: OpFormatBinary("f+"),
-        OpCode.FLOAT_CEIL: OpFormatFunc("ceil"),
-        OpCode.FLOAT_DIV: OpFormatBinary("f/"),
-        OpCode.FLOAT_EQUAL: OpFormatBinary("f=="),
-        OpCode.FLOAT_FLOAT2FLOAT: OpFormatFunc("float2float"),
-        OpCode.FLOAT_FLOOR: OpFormatFunc("floor"),
-        OpCode.FLOAT_INT2FLOAT: OpFormatFunc("int2float"),
-        OpCode.FLOAT_LESS: OpFormatBinary("f<"),
-        OpCode.FLOAT_LESSEQUAL: OpFormatBinary("f<="),
-        OpCode.FLOAT_MULT: OpFormatBinary("f*"),
-        OpCode.FLOAT_NAN: OpFormatFunc("nan"),
-        OpCode.FLOAT_NEG: OpFormatUnary("f- "),
-        OpCode.FLOAT_NOTEQUAL: OpFormatBinary("f!="),
-        OpCode.FLOAT_ROUND: OpFormatFunc("round"),
-        OpCode.FLOAT_SQRT: OpFormatFunc("sqrt"),
-        OpCode.FLOAT_SUB: OpFormatBinary("f-"),
-        OpCode.FLOAT_TRUNC: OpFormatFunc("trunc"),
-        OpCode.INT_2COMP: OpFormatUnary("-"),
-        OpCode.INT_ADD: OpFormatBinary("+"),
-        OpCode.INT_AND: OpFormatBinary("&"),
-        OpCode.INT_CARRY: OpFormatFunc("carry"),
-        OpCode.INT_DIV: OpFormatBinary("/"),
-        OpCode.INT_EQUAL: OpFormatBinary("=="),
-        OpCode.INT_LEFT: OpFormatBinary("<<"),
-        OpCode.INT_LESS: OpFormatBinary("<"),
-        OpCode.INT_LESSEQUAL: OpFormatBinary("<="),
-        OpCode.INT_MULT: OpFormatBinary("*"),
-        OpCode.INT_NEGATE: OpFormatUnary("~"),
-        OpCode.INT_NOTEQUAL: OpFormatBinary("!="),
-        OpCode.INT_OR: OpFormatBinary("|"),
-        OpCode.INT_REM: OpFormatBinary("%"),
-        OpCode.INT_RIGHT: OpFormatBinary(">>"),
-        OpCode.INT_SBORROW: OpFormatFunc("sborrow"),
-        OpCode.INT_SCARRY: OpFormatFunc("scarry"),
-        OpCode.INT_SDIV: OpFormatBinary("s/"),
-        OpCode.INT_SEXT: OpFormatFunc("sext"),
-        OpCode.INT_SLESS: OpFormatBinary("s<"),
-        OpCode.INT_SLESSEQUAL: OpFormatBinary("s<="),
-        OpCode.INT_SREM: OpFormatBinary("s%"),
-        OpCode.INT_SRIGHT: OpFormatBinary("s>>"),
-        OpCode.INT_SUB: OpFormatBinary("-"),
-        OpCode.INT_XOR: OpFormatBinary("^"),
-        OpCode.INT_ZEXT: OpFormatFunc("zext"),
+      # OpCode.CBRANCH: OpFormatSpecial(),
+      # OpCode.COPY: OpFormatUnary(""),
+      # OpCode.CPOOLREF: OpFormatFunc("cpool"),
+      # OpCode.FLOAT_ABS: OpFormatFunc("abs"),
+      # OpCode.FLOAT_ADD: OpFormatBinary("f+"),
+      # OpCode.FLOAT_CEIL: OpFormatFunc("ceil"),
+      # OpCode.FLOAT_DIV: OpFormatBinary("f/"),
+      # OpCode.FLOAT_EQUAL: OpFormatBinary("f=="),
+      # OpCode.FLOAT_FLOAT2FLOAT: OpFormatFunc("float2float"),
+      # OpCode.FLOAT_FLOOR: OpFormatFunc("floor"),
+      # OpCode.FLOAT_INT2FLOAT: OpFormatFunc("int2float"),
+      # OpCode.FLOAT_LESS: OpFormatBinary("f<"),
+      # OpCode.FLOAT_LESSEQUAL: OpFormatBinary("f<="),
+      # OpCode.FLOAT_MULT: OpFormatBinary("f*"),
+      # OpCode.FLOAT_NAN: OpFormatFunc("nan"),
+      # OpCode.FLOAT_NEG: OpFormatUnary("f- "),
+      # OpCode.FLOAT_NOTEQUAL: OpFormatBinary("f!="),
+      # OpCode.FLOAT_ROUND: OpFormatFunc("round"),
+      # OpCode.FLOAT_SQRT: OpFormatFunc("sqrt"),
+      # OpCode.FLOAT_SUB: OpFormatBinary("f-"),
+      # OpCode.FLOAT_TRUNC: OpFormatFunc("trunc"),
+      # OpCode.INT_2COMP: OpFormatUnary("-"),
+      # OpCode.INT_ADD: OpFormatBinary("+"),
+      # OpCode.INT_AND: OpFormatBinary("&"),
+      # OpCode.INT_CARRY: OpFormatFunc("carry"),
+      # OpCode.INT_DIV: OpFormatBinary("/"),
+      # OpCode.INT_EQUAL: OpFormatBinary("=="),
+      # OpCode.INT_LEFT: OpFormatBinary("<<"),
+      # OpCode.INT_LESS: OpFormatBinary("<"),
+      # OpCode.INT_LESSEQUAL: OpFormatBinary("<="),
+      # OpCode.INT_MULT: OpFormatBinary("*"),
+      # OpCode.INT_NEGATE: OpFormatUnary("~"),
+      # OpCode.INT_NOTEQUAL: OpFormatBinary("!="),
+      # OpCode.INT_OR: OpFormatBinary("|"),
+      # OpCode.INT_REM: OpFormatBinary("%"),
+      # OpCode.INT_RIGHT: OpFormatBinary(">>"),
+      # OpCode.INT_SBORROW: OpFormatFunc("sborrow"),
+      # OpCode.INT_SCARRY: OpFormatFunc("scarry"),
+      # OpCode.INT_SDIV: OpFormatBinary("s/"),
+      # OpCode.INT_SEXT: OpFormatFunc("sext"),
+      # OpCode.INT_SLESS: OpFormatBinary("s<"),
+      # OpCode.INT_SLESSEQUAL: OpFormatBinary("s<="),
+      # OpCode.INT_SREM: OpFormatBinary("s%"),
+      # OpCode.INT_SRIGHT: OpFormatBinary("s>>"),
+      # OpCode.INT_SUB: OpFormatBinary("-"),
+      # OpCode.INT_XOR: OpFormatBinary("^"),
+      # OpCode.INT_ZEXT: OpFormatFunc("zext"),
         OpCode.LOAD: OpFormatSpecial(),
-        OpCode.NEW: OpFormatFunc("newobject"),
-        OpCode.POPCOUNT: OpFormatFunc("popcount"),
-        OpCode.LZCOUNT: OpFormatFunc("lzcount"),
-        OpCode.RETURN: OpFormatSpecial(),
+      # OpCode.NEW: OpFormatFunc("newobject"),
+      # OpCode.POPCOUNT: OpFormatFunc("popcount"),
+      # OpCode.LZCOUNT: OpFormatFunc("lzcount"),
+      # OpCode.RETURN: OpFormatSpecial(),
         OpCode.STORE: OpFormatSpecial(),
     }
 
