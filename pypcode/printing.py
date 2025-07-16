@@ -108,10 +108,7 @@ class OpFormatSpecial(OpFormat):
         return f"call [{self.fmt_vn(op.inputs[0])}]"
 
     def fmt_CALLOTHER(self, op: PcodeOp) -> str:
-        op_name = op.inputs[0].getUserDefinedOpName()
-        if op_name == "software_bkpt":
-            op_name = "SoftwareBreakpoint"
-        return f'CALLOTHER {op_name}, {", ".join(self.fmt_vn(i) for i in op.inputs[1:])}'.rstrip(', ')
+        return f'{op.inputs[0].getUserDefinedOpName()}({", ".join(self.fmt_vn(i) for i in op.inputs[1:])})'.rstrip(', ')
 
     def fmt_CBRANCH(self, op: PcodeOp) -> str:
         return f"if ({self.fmt_vn(op.inputs[1])}) goto {self.fmt_vn(op.inputs[0])}"
